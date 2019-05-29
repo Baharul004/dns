@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+#import services
+#services.manage()
+import os, sys
+sys.path.insert(0, os.path.join(os.environ['CHARM_DIR'], 'lib'))
+from charmhelpers.core import (
+    hookenv,
+    host,
+)
+
+config = hookenv.config()
+host_address = ''
+url_address = ''
+dns_address =hookenv.unit_get('private-address')
+for key in config:
+#  if config.changed(key):
+  hookenv.log("config['{}'] changed from {} to {}".format(key, config.previous(key), config[key]))
+  if key == 'host':
+    host_address = config[key]
+  else:
+    url_address = config[key]
+#config.save()
+hookenv.log("HOST Chnaged IP Address: {}".format(host_address))
+hookenv.log("URL  Address: {}".format(url_address))
+
+#dns_host = hookenv.unit_get('private-address')
+def named_options():
+  forwarders = "        forwarders {"
+  ip ="                 8.8.8.8; };"
+  options_file = open('/etc/bind/named.conf.options').read()
+  if forwarders in options_file:
+    hookenv.log('Options lines are available', 'INFO')
+  else:
+    file = open('/etc/bind/named.conf.options','r')
+    file_contents = file.readlines()
+    file.close()
+    file_contents.insert(15, forwarders)
+    file_contents.insert(16, '\n')
+    file_contents.insert(17, ip)
+    file_contents.insert(18, '\n')
+#    options_file.writelines(file_contents)
+    file = open('/etc/bind/named.conf.options','w')
+    file_contents = "".join(file_contents)
+    file.write(file_contents)
+    hookenv.log('Options lines are INSERTED', 'INFO')
+
+def interfaces():
+  auto = 'auto enp0s3'
+  iface = 'iface enp0s3 inet static'
+  address = 'address {}'.format(host_address)
+  netmask = 'netmask 255.255.255.0'
+  dns_nameservers = 'dns-nameservers {}'.format(dns_address)
+  file = open('/etc/network/interfaces').read()
+  if iface in file:
+    hookenv.log('INTERFACES are available', 'INFO')
+  else:
+    file1 = open('/etc/network/interfaces','r')
+    file_contents = file1.readlines()
+    file1.close()
+    file_contents.insert(4, auto)
+    file_contents.insert(5, '\n')
+    file_contents.insert(6, iface)
+    file_contents.insert(7, '\n')
+    file_contents.insert(8,address)
+    file_contents.insert(9,'\n')
+    file_contents.insert(10, netmask)
+    file_contents.insert(11, '\n')
+    file_contents.insert(12,dns_nameservers)
+    file_contents.insert(13, '\n')
+#    file.writelines(file_contents)
+    file1 = open('/etc/network/interfaces','w')
+    file_contents = "".join(file_contents)
+    file1.write(file_contents)
+    hookenv.log('INTERFACES inserted', 'INFO')
+#    os.system('systemctl restart bind9')
+#  else:
+#    hookenv.log('INTERFACES are available', 'INFO')
+
+def resolve():
+  name ='nameserver 127.0.0.53'
+  nameserver ='nameserver {}'.format(dns_address)
+  file = open('/etc/resolv.conf').read()
+  if name in file:
+    file1 = file.replace(name, nameserver)
+    with open('/etc/resolv.conf', 'w') as file:
+      file.write(file1)
+      hookenv.log('RESOLVE REPLACED', 'INFO')
+      file.close()
+  else:
+    hookenv.log('RESOLVE not  REPLACED', 'INFO')
+def file():
+  f = open('/etc/bind/for.test.ded', 'w')
+  f1 = open('/etc/bind/rev.test.ded', 'w')
+  os.chmod('/etc/bind/bind.keys', 0o0777)
+  os.chmod('/etc/bind/db.127', 0o0777)
+  os.chmod('/etc/bind/db.empty', 0o0777)
+  os.chmod('/etc/bind/db.0', 0o0777)
+  os.chmod('/etc/bind/db.255', 0o0777)
+  os.chmod('/etc/bind/db.local', 0o0777)
+  os.chmod('/etc/bind/db.root', 0o0777)
+  os.chmod('/etc/bind/for.test.ded', 0o0777)
+  os.chmod('/etc/bind/rev.test.ded', 0o0777)
+  os.chmod('/etc/bind/named.conf', 0o0777)
+  os.chmod('/etc/bind/named.conf.default-zones', 0o0777)
+  os.chmod('/etc/bind/named.conf.local', 0o0777)
+  os.chmod('/etc/bind/named.conf.options', 0o0777)
+  os.chmod('/etc/bind/rndc.key', 0o0777)
+  os.chmod('/etc/bind/zones.rfc1918', 0o0777)
+#  for root, files in os.walk('/etc/bind'):
+#    for f in files:
+#      os.chmod(os.path.join(root, f), 0o0777)
+#  os.chmod('/etc/bind/', 0o0777)
+
+def name_local():
+ # f = open('/etc/bind/for.test.ded', 'x')
+ # f1 = open('/etc/bind/rev.test.ded', 'x')
+  zone ='zone "{}" IN'.format(url_address)
+  sec ='{'
+  type ='  type master;'
+  file_url= '  file "/etc/bind/for.test.ded"; };'
+
+  zone1 = 'zone "{}.in-addr.arpa" IN'.format(host_address)
+  b = '{'
+  type1 = '  type master;'
+  file_url1 = '  file "/etc/bind/rev.test.ded"; };'
+
+  file = open('/etc/bind/named.conf.local').read()
+  if zone not in file:
+    file1 =  open('/etc/bind/named.conf.local','r')
+    file_contents = file1.readlines()
+    file1.close()
+    file_contents.insert(1, zone)
+    file_contents.insert(2, sec)
+    file_contents.insert(3, '\n')
+    file_contents.insert(4, type)
+    file_contents.insert(5, '\n')
+    file_contents.insert(6, file_url)
+    file_contents.insert(7, '\n')
+    file_contents.insert(8, zone1)
+    file_contents.insert(9, b)
+    file_contents.insert(10, '\n')
+    file_contents.insert(11, type1)
+    file_contents.insert(12, '\n')
+    file_contents.insert(13, file_url1)
+    file_contents.insert(14,'\n')
+#    file.writelines(file_contents)
+    file1 = open('/etc/bind/named.conf.local','w')
+    file_contents = "".join(file_contents)
+    file1.write(file_contents)
+    hookenv.log('Name LOcal is edited', 'INFO')
+  else:
+    hookenv.log('Name Local is available', 'INFO')
+
+def for_test():
+  ttl ='$TTL 86400'
+  soa = '@  IN  SOA  {}. admin.{}. ('.format(url_address, url_address)
+  serial = '    2011071001  ;Serial'
+  ref = '    3600        ;Refresh'
+  ret = '    1800        ;Retry'
+  exp = '    604800      ;Expire'
+  min = '    86400       ;Minimum TTL '
+  b = ')'
+  ns = '@       IN  NS          {}.'.format(url_address)
+  a = '@       IN  A           {}'.format(host_address)
+  aa = 'test    IN  A           {}'.format(host_address)
+  file = open('/etc/bind/for.test.ded').read()
+  if ttl not in file:
+     file1 = open('/etc/bind/for.test.ded','r')
+     file_contents = file1.readlines()
+     file1.close()
+     file_contents.insert(6, ttl)
+     file_contents.insert(7, '\n')
+     file_contents.insert(8, soa)
+     file_contents.insert(9, '\n')
+     file_contents.insert(10, serial)
+     file_contents.insert(11, '\n')
+     file_contents.insert(12, ref)
+     file_contents.insert(13, '\n')
+     file_contents.insert(14, ret)
+     file_contents.insert(15, '\n')
+     file_contents.insert(16, exp)
+     file_contents.insert(17, '\n')
+     file_contents.insert(18, min)
+     file_contents.insert(19, '\n')
+     file_contents.insert(20, b)
+     file_contents.insert(21, '\n')
+     file_contents.insert(22, ns)
+     file_contents.insert(23, '\n')
+     file_contents.insert(24, a)
+     file_contents.insert(25, '\n')
+     file_contents.insert(26, aa)
+#     file.writelines(file_contents)
+     file1 = open('/etc/bind/for.test.ded','w')
+     file_contents = "".join(file_contents)
+     file1.write(file_contents)
+     hookenv.log('FOR FILE is edited', 'INFO')
+
+  else:
+     hookenv.log('For file not edited', 'INFO')
+
+
+def rev_test():
+  ttl ='$TTL 86400'
+  soa = '@  IN  SOA  {}. admin.{}. ('.format(url_address, url_address)
+  serial = '    2011071002  ;Serial'
+  ref = '    3600        ;Refresh'
+  ret = '    1800        ;Retry'
+  exp = '    604800      ;Expire'
+  min = '    86400       ;Minimum TTL '
+  b = ')'
+  ns = '@       IN  NS          {}.'.format(url_address)
+  ptr = '@       IN  PTR         {}.'.format(url_address)
+  a = '@       IN  A           {}'.format(host_address)
+
+  file = open('/etc/bind/rev.test.ded').read()
+  if ttl not in file:
+     file1 = open('/etc/bind/rev.test.ded','r')
+     file_contents = file1.readlines()
+     file1.close()
+     file_contents.insert(6, ttl)
+     file_contents.insert(7, '\n')
+     file_contents.insert(8, soa)
+     file_contents.insert(9, '\n')
+     file_contents.insert(10, serial)
+     file_contents.insert(11, '\n')
+     file_contents.insert(12, ref)
+     file_contents.insert(13, '\n')
+     file_contents.insert(14, ret)
+     file_contents.insert(15, '\n')
+     file_contents.insert(16, exp)
+     file_contents.insert(17, '\n')
+     file_contents.insert(18, min)
+     file_contents.insert(19, '\n')
+     file_contents.insert(20, b)
+     file_contents.insert(21, '\n')
+     file_contents.insert(22, ns)
+     file_contents.insert(23, '\n')
+     file_contents.insert(24, ptr)
+     file_contents.insert(25, '\n')
+     file_contents.insert(26, a)
+#     file.writelines(file_contents)
+     file1 = open('/etc/bind/rev.test.ded','w')
+     file_contents = "".join(file_contents)
+     file1.write(file_contents)
+     hookenv.log('REV FILE is edited', 'INFO')
+  else:
+     hookenv.log('REV file not edited', 'INFO')
+
+def restart():
+  os.system('/etc/init.d/network-manager restart')
+  os.system('systemctl restart bind9')
+
+#def relation():
+#  hookenv.relation_set({'user': 80, 'tuning': 'default'})
+
+if __name__ == "__main__":
+  named_options()
+  interfaces()
+  resolve()
+  file()
+  name_local()
+  for_test()
+  rev_test()
+  restart()
+#  relation()
